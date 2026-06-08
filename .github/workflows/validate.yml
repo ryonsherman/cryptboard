@@ -1,0 +1,9 @@
+name: Validate
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "OK"
