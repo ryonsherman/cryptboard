@@ -70,6 +70,48 @@ Downloads only the message files added after `--since` (defaults to 1 month
 ago) and tries each one. Prints every message that decrypts successfully.
 If your ID has received multiple messages, you'll see them all.
 
+## Example
+
+Generate an ID (your shared secret):
+
+```
+$ cryptboard gen-id
+a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+```
+
+Send a message:
+
+```
+$ cryptboard send a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2 "Hello from e2e test!"
+Message queued and will post automatically
+```
+
+The script forks the repo, commits the encrypted message, and opens a PR. The
+workflow validates it's a new file under `messages/`, confirms the format, and
+auto-merges — all in a few seconds.
+
+Receive messages (same ID):
+
+```
+$ cryptboard receive a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+Hello from e2e test!
+```
+
+Multiple messages sent to the same ID appear on separate lines. A wrong ID
+returns nothing:
+
+```
+$ cryptboard receive deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+No messages found
+```
+
+The `--since` flag narrows the window:
+
+```
+$ cryptboard receive a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2 --since 2026-06-07
+Hello from e2e test!
+```
+
 ## The repo format
 
 Each message is a file in `messages/` named `<uuid>.json`:
