@@ -15,17 +15,15 @@ jobs:
       - name: Check only additions in messages/
         run: |
           git fetch origin "${{ github.event.pull_request.base.ref }}"
-          git diff --name-status FETCH_HEAD HEAD |
+          git diff --name-status FETCH_HEAD HEAD > /tmp/changes || true
           while read status file; do
             [ "$status" != "A" ] && echo "Non-additive: $status $file" && exit 1
             [[ "$file" != messages/* ]] && echo "Outside messages/: $file" && exit 1
-          done
+          done < /tmp/changes
 
       - name: Validate message format
         run: |
-          git fetch origin "${{ github.event.pull_request.base.ref }}"
-          git diff --name-status FETCH_HEAD HEAD |
-          awk '$1=="A"{print $2}' |
+          awk '$1=="A"{print $2}' /tmp/changes |
           while read f; do python3 .github/scripts/validate_message.py "$f"; done
 
       - name: Auto-merge
