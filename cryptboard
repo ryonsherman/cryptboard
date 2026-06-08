@@ -87,7 +87,30 @@ def cmd_send(args):
             print(f"Error: {result.stderr}", file=sys.stderr)
             sys.exit(1)
 
-        subprocess.run(["gh", "pr", "create", "--fill"], cwd=repo_dir, check=True, capture_output=True)
+        gh_user = subprocess.run(
+            ["gh", "api", "user", "--jq", ".login"],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+        subprocess.run(
+            ["gh", "api", f"repos/ryonsherman/cryptboard/forks", "--method", "POST", "--silent"],
+            capture_output=True, text=True,
+        )
+
+        subprocess.run(
+            ["git", "remote", "add", "fork", f"https://github.com/{gh_user}/cryptboard.git"],
+            cwd=repo_dir, check=True, capture_output=True,
+        )
+
+        subprocess.run(
+            ["git", "push", "fork", branch],
+            cwd=repo_dir, check=True, capture_output=True,
+        )
+
+        subprocess.run(
+            ["gh", "pr", "create", "--fill", "--head", f"{gh_user}:{branch}"],
+            cwd=repo_dir, check=True, capture_output=True,
+        )
 
         print("Message queued and will post automatically")
     except subprocess.CalledProcessError as e:

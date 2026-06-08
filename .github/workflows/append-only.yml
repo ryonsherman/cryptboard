@@ -14,11 +14,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Check only additions in messages/
         run: |
           git fetch origin "${{ github.event.pull_request.base.ref }}"
-          changed=$(git diff --name-status FETCH_HEAD HEAD)
+          base_sha=$(git rev-parse FETCH_HEAD)
+          changed=$(git diff --name-status "$base_sha" HEAD)
           echo "$changed"
           while IFS= read -r line; do
             [ -z "$line" ] && continue
@@ -37,7 +39,9 @@ jobs:
 
       - name: Validate message format
         run: |
-          new_files=$(git diff --name-status FETCH_HEAD HEAD | awk '$1 == "A" {print $2}')
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+          base_sha=$(git rev-parse FETCH_HEAD)
+          new_files=$(git diff --name-status "$base_sha" HEAD | awk '$1 == "A" {print $2}')
           for f in $new_files; do
             python3 -c "
 import json, sys, base64
