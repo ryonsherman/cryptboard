@@ -66,9 +66,9 @@ request on GitHub, and prints confirmation when the PR lands.
 cryptboard receive <id> [--since 2025-01-01]
 ```
 
-Downloads only the message files added after `--since` (if provided) and
-tries each one. Prints every message that decrypts successfully. If your ID
-has received multiple messages, you'll see them all.
+Downloads only the message files added after `--since` (defaults to 1 month
+ago) and tries each one. Prints every message that decrypts successfully.
+If your ID has received multiple messages, you'll see them all.
 
 ## The repo format
 
@@ -98,6 +98,6 @@ Each message is a file in `messages/` named `<uuid>.json`:
 ## Limitations
 
 - The `send` command requires `gh` to be authenticated with a GitHub account.
-- The `receive` command clones the repo each time (lightweight shallow clone
-  when `--since` is used).
+- The `receive` command does a lightweight shallow clone of the last ~30 days
+  by default. Use `--since` to adjust the window.
 - Rate limits on unauthenticated GitHub API usage may affect heavy use.
