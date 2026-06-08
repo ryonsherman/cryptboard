@@ -129,7 +129,7 @@ def cmd_receive(args):
     try:
         clone_cmd = ["git", "clone", "--single-branch", REPO_URL, repo_dir]
         if args.since:
-            clone_cmd[1:1] = [f"--shallow-since={args.since}"]
+            clone_cmd[2:2] = [f"--shallow-since={args.since}"]
 
         subprocess.run(clone_cmd, check=True, capture_output=True, text=True)
 
