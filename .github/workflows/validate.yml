@@ -4,10 +4,32 @@ on:
     types: [opened, synchronize]
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "step 1"
-      - run: |
-          python3 -c "import json; print('hello from python')"
-      - run: echo "step 3"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check only additions in messages/
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+          git diff --name-status FETCH_HEAD HEAD |
+          while read status file; do
+            [ "$status" != "A" ] && echo "Non-additive: $status $file" && exit 1
+            [[ "$file" != messages/* ]] && echo "Outside messages/: $file" && exit 1
+          done
+
+      - name: Validate message format
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+          git diff --name-status FETCH_HEAD HEAD |
+          awk '$1=="A"{print $2}' |
+          while read f; do python3 .github/scripts/validate_message.py "$f"; done
+
+      - name: Auto-merge
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge --squash "${{ github.event.pull_request.html_url }}"
