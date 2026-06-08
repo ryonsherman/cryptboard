@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+import argparse
+import base64
+import hashlib
+import json
+import os
+import secrets
+import subprocess
+import sys
+import tempfile
+import uuid
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding
+
+REPO_URL = "git@github.com:ryonsherman/cryptboard.git"
+HEADER_PLAINTEXT = b"CRYPTBOARD"
+
+
+def derive_key(id_hex):
+    return hashlib.sha256(id_hex.encode()).digest()
+
+
+def _encrypt(key, plaintext):
+    iv = os.urandom(16)
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(plaintext) + padder.finalize()
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+    ctext = encryptor.update(padded) + encryptor.finalize()
+    return base64.b64encode(iv + ctext).decode()
+
+
+def _decrypt(key, data):
+    raw = base64.b64decode(data)
+    iv, ctext = raw[:16], raw[16:]
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    decryptor = cipher.decryptor()
+    padded = decryptor.update(ctext) + decryptor.finalize()
+    unpadder = padding.PKCS7(128).unpadder()
+    return unpadder.update(padded) + unpadder.finalize()
+
+
+def make_message(key, body):
+    return {"h": _encrypt(key, HEADER_PLAINTEXT), "b": _encrypt(key, body.encode())}
+
+
+def header_matches(key, data):
+    try:
+        return _decrypt(key, data) == HEADER_PLAINTEXT
+    except Exception:
+        return False
+
+
+def cmd_gen_id():
+    print(secrets.token_hex(32))
+
+
+def cmd_send(args):
+    msg = make_message(derive_key(args.id), args.message)
+    filename = f"{uuid.uuid4()}.json"
+
+    tmpdir = tempfile.mkdtemp(prefix="cryptboard-send-")
+    repo_dir = os.path.join(tmpdir, "repo")
+
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", "--single-branch", REPO_URL, repo_dir],
+            check=True, capture_output=True, text=True,
+        )
+
+        msgs_dir = os.path.join(repo_dir, "messages")
+        os.makedirs(msgs_dir, exist_ok=True)
+        with open(os.path.join(msgs_dir, filename), "w") as f:
+            json.dump(msg, f, separators=(",", ":"))
+
+        branch = f"cryptboard/send-{uuid.uuid4().hex[:8]}"
+        subprocess.run(["git", "checkout", "-b", branch], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "add", "-A"], cwd=repo_dir, check=True, capture_output=True)
+
+        result = subprocess.run(
+            ["git", "commit", "-m", f"Add message {filename}"],
+            cwd=repo_dir, capture_output=True, text=True,
+        )
+        if result.returncode != 0 and "nothing to commit" not in result.stderr:
+            print(f"Error: {result.stderr}", file=sys.stderr)
+            sys.exit(1)
+
+        subprocess.run(["gh", "pr", "create", "--fill"], cwd=repo_dir, check=True, capture_output=True)
+
+        print("Message queued and will post automatically")
+    except subprocess.CalledProcessError as e:
+        print(f"Error: {e.stderr}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        subprocess.run(["rm", "-rf", tmpdir])
+
+
+def cmd_receive(args):
+    key = derive_key(args.id)
+
+    tmpdir = tempfile.mkdtemp(prefix="cryptboard-recv-")
+    repo_dir = os.path.join(tmpdir, "repo")
+
+    try:
+        clone_cmd = ["git", "clone", "--single-branch", REPO_URL, repo_dir]
+        if args.since:
+            clone_cmd[1:1] = [f"--shallow-since={args.since}"]
+
+        subprocess.run(clone_cmd, check=True, capture_output=True, text=True)
+
+        msg_dir = os.path.join(repo_dir, "messages")
+        if not os.path.isdir(msg_dir):
+            print("No messages found")
+            return
+
+        found = 0
+        for fname in sorted(os.listdir(msg_dir)):
+            if not fname.endswith(".json"):
+                continue
+            fpath = os.path.join(msg_dir, fname)
+            try:
+                with open(fpath) as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
+
+            if not isinstance(data, dict) or "h" not in data or "b" not in data:
+                continue
+            if not header_matches(key, data["h"]):
+                continue
+            try:
+                body = _decrypt(key, data["b"])
+                print(body.decode())
+                found += 1
+            except Exception:
+                continue
+
+        if found == 0:
+            print("No messages found")
+    except subprocess.CalledProcessError as e:
+        print(f"Error: {e.stderr}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        subprocess.run(["rm", "-rf", tmpdir])
+
+
+def main():
+    parser = argparse.ArgumentParser(description="cryptboard — public encrypted dead drops over GitHub")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("gen-id", help="Generate a new ID")
+
+    p_send = sub.add_parser("send", help="Send an encrypted message")
+    p_send.add_argument("id", help="Recipient's ID")
+    p_send.add_argument("message", help="Message to encrypt and send")
+
+    p_recv = sub.add_parser("receive", help="Receive your messages")
+    p_recv.add_argument("id", help="Your ID")
+    p_recv.add_argument("--since", help="Only fetch messages since this date (e.g. 2025-01-01)")
+
+    args = parser.parse_args()
+    if args.command == "gen-id":
+        cmd_gen_id()
+    elif args.command == "send":
+        cmd_send(args)
+    elif args.command == "receive":
+        cmd_receive(args)
+
+
+if __name__ == "__main__":
+    main()
