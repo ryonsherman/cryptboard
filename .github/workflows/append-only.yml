@@ -1,7 +1,7 @@
 name: Append Only
 on:
   workflow_dispatch:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 permissions:
@@ -15,10 +15,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Check only additions in messages/
         run: |
-          base_sha=$(git merge-base HEAD~1 HEAD 2>/dev/null || git rev-parse HEAD~1)
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+          base_sha=$(git rev-parse FETCH_HEAD)
           changed=$(git diff --name-status "$base_sha" HEAD)
           echo "$changed"
           while IFS= read -r line; do
@@ -38,7 +40,8 @@ jobs:
 
       - name: Validate message format
         run: |
-          base_sha=$(git merge-base HEAD~1 HEAD 2>/dev/null || git rev-parse HEAD~1)
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+          base_sha=$(git rev-parse FETCH_HEAD)
           new_files=$(git diff --name-status "$base_sha" HEAD | awk '$1 == "A" {print $2}')
           for f in $new_files; do
             python3 -c "
