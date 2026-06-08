@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+from datetime import datetime, timedelta, timezone
 import secrets
 import subprocess
 import sys
@@ -157,7 +158,8 @@ def main():
 
     p_recv = sub.add_parser("receive", help="Receive your messages")
     p_recv.add_argument("id", help="Your ID")
-    p_recv.add_argument("--since", help="Only fetch messages since this date (e.g. 2025-01-01)")
+    default_since = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
+    p_recv.add_argument("--since", default=default_since, help="Only fetch messages since this date (default: 1 month ago)")
 
     args = parser.parse_args()
     if args.command == "gen-id":
