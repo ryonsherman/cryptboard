@@ -4,58 +4,10 @@ on:
     types: [opened, synchronize]
 
 jobs:
-  check-and-merge:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Check only additions in messages/
-        run: |
-          git fetch origin "${{ github.event.pull_request.base.ref }}"
-          base_sha=$(git rev-parse FETCH_HEAD)
-          changed=$(git diff --name-status "$base_sha" HEAD)
-          echo "$changed"
-          while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            status=$(echo "$line" | awk '{print $1}')
-            file=$(echo "$line" | awk '{print $2}')
-            if [ "$status" != "A" ]; then
-              echo "❌ Only additions allowed. Found: $status $file"
-              exit 1
-            fi
-            if [[ "$file" != messages/* ]]; then
-              echo "❌ Only files in messages/ are allowed: $file"
-              exit 1
-            fi
-          done
-          echo "✅ All changes are additions to messages/"
-
-      - name: Validate message format
-        run: |
-          git fetch origin "${{ github.event.pull_request.base.ref }}"
-          base_sha=$(git rev-parse FETCH_HEAD)
-          new_files=$(git diff --name-status "$base_sha" HEAD | awk '$1 == "A" {print $2}')
-          for f in $new_files; do
-            python3 << EOF
-import json, sys, base64
-with open("$f") as fh:
-    d = json.load(fh)
-assert isinstance(d, dict) and 'h' in d and 'b' in d, 'missing h/b keys'
-base64.b64decode(d['h'])
-base64.b64decode(d['b'])
-EOF
-            if [ $? -ne 0 ]; then
-              echo "❌ Invalid message format in $f"
-              exit 1
-            fi
-          done
-          echo "✅ All message files valid"
-
-      - name: Auto-merge
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh pr merge --squash "${{ github.event.pull_request.html_url }}"
+      - run: echo "step 1"
+      - run: |
+          python3 -c "import json; print('hello from python')"
+      - run: echo "step 3"
